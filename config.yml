@@ -1,0 +1,5 @@
+# Amount of money the server account starts with
+server_starting_balance: 25000
+
+# Amount of money the server account generates everyday
+server_daily_inflation: 100

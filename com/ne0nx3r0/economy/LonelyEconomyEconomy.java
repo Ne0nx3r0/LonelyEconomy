@@ -8,7 +8,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -82,6 +81,10 @@ public final class LonelyEconomyEconomy {
                 + "balance VARCHAR(32),"                // String <> BigDecimal
                 + "sorting_balance INT"                // Never read from, only used to sort for /top, etc.
             + ");"); 
+            
+            sqlite.query("pragma journal_mode=wal");
+            
+            sqlite.query("CREATE UNIQUE INDEX user on accounts (username)");
             
             plugin.getLogger().log(Level.INFO, "Database & accounts table created.");
             
@@ -242,7 +245,6 @@ public final class LonelyEconomyEconomy {
     }
 
     private synchronized LonelyEconomyResponse setPlayerBalance(String playerName,BigDecimal amount) {    
-        long startTime = System.nanoTime();    
         try
         {
             PreparedStatement statement = sqlite.prepare("UPDATE accounts SET balance=?,sorting_balance=? WHERE username=?");
@@ -262,14 +264,11 @@ public final class LonelyEconomyEconomy {
                 .setMessage("A database error occurred!");
         }
         
-        System.out.println((System.nanoTime()-startTime)+" setPlayerBalance("+playerName+")");
-        
         return new LonelyEconomyResponse(LonelyEconomyResponseType.SUCCESS)
             .setBalance(amount);
     }
     
     public LonelyEconomyResponse takeMoneyFromPlayer(String playerName, BigDecimal amount) {
-        long startTime = System.nanoTime();
         
         if(!this.hasAccount(playerName)) {
             return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE_NO_ACCOUNT_EXISTS)
@@ -312,19 +311,16 @@ public final class LonelyEconomyEconomy {
         
         this.log("Took "+amount.toPlainString()+" from "+playerName);
         
-        System.out.println((System.nanoTime()-startTime)+" takeMoneyFromPlayer("+playerName+")");
 // Return success  
         return ler;
     }
 
-    public LonelyEconomyResponse giveMoneyToPlayer(String playerName, BigDecimal amount) {
-        long startTime = System.nanoTime();
-        
+    public LonelyEconomyResponse giveMoneyToPlayer(String playerName, BigDecimal amount) {        
         if(!this.hasAccount(playerName)) {
             return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE_NO_ACCOUNT_EXISTS)
                 .setMessage("No account exists for "+playerName+"!");
         }
-
+        
         this.log("Attempting to give "+amount.toPlainString()+" to "+playerName);
        
 // Grab server's balance to see if the server has enough
@@ -363,14 +359,11 @@ public final class LonelyEconomyEconomy {
         
         this.log("Gave "+amount.toPlainString()+" to "+playerName);
 
-        System.out.println((System.nanoTime()-startTime)+" giveMoneyToPlayer("+playerName+")");
 // Return success        
         return ler;
     }
 
     public LonelyEconomyResponse payPlayer(String payFrom, String payTo, BigDecimal amount) {
-        
-        long startTime = System.nanoTime();
         
         if(payFrom.equalsIgnoreCase(payTo)) {
             // no need to do anything...
@@ -388,7 +381,6 @@ public final class LonelyEconomyEconomy {
             return ler;
         }
         
-        System.out.println((System.nanoTime()-startTime)+" payPlayer("+payFrom+","+payTo+")");
         return this.giveMoneyToPlayer(payTo,amount);
     }
 
@@ -459,12 +451,10 @@ public final class LonelyEconomyEconomy {
     }
     
     public BigDecimal getBigDecimal(String amount) throws NumberFormatException {
-        long startTime = System.nanoTime();
         BigDecimal bd;
 
         bd = new BigDecimal(amount);
 
-        System.out.println((System.nanoTime()-startTime)+" from getBigDecimal("+amount+")");
         return bd.setScale(2, BigDecimal.ROUND_HALF_UP);
     }
     

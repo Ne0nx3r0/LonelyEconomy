@@ -2,7 +2,13 @@ package com.ne0nx3r0.economy;
 
 import com.ne0nx3r0.lonelyeconomy.LonelyEconomy;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -19,9 +25,9 @@ import org.bukkit.ChatColor;
 public final class LonelyEconomyEconomy {
     private final LonelyEconomy plugin;
     private final SQLite sqlite;
-    private final String SERVER_ACCOUNT_USERNAME = "!*~server~*!";
     private boolean enabled;
     private Logger logger;
+    private BigDecimal SERVER_BALANCE;
     
     public LonelyEconomyEconomy(LonelyEconomy plugin) {
         this.plugin = plugin;
@@ -36,14 +42,12 @@ public final class LonelyEconomyEconomy {
             logger.addHandler(fh);  
             //logger.setLevel(Level.ALL);  
             SimpleFormatter formatter = new SimpleFormatter();  
-            fh.setFormatter(formatter);  
-
-            
-              
+            fh.setFormatter(formatter);                
         } catch (SecurityException | IOException ex) {  
             Logger.getLogger(LonelyEconomyEconomy.class.getName()).log(Level.SEVERE, null, ex);
             
             this.sqlite = null;
+            this.serverBalanceFilename = null;
             
             plugin.disable();
             
@@ -65,6 +69,8 @@ public final class LonelyEconomyEconomy {
             
             plugin.disable();
             
+            this.serverBalanceFilename = null;
+            
             return;
         }
         
@@ -80,10 +86,38 @@ public final class LonelyEconomyEconomy {
             plugin.getLogger().log(Level.INFO, "Database & accounts table created.");
             
             this.log("Database & accounts table created.");
-            
-            BigDecimal serverStartingBalance = new BigDecimal(plugin.getConfig().getInt("server_starting_balance",0)); 
+        }
         
-            this.createAccount(SERVER_ACCOUNT_USERNAME, serverStartingBalance);
+        File serverBalanceFile = new File(plugin.getDataFolder(),"serverBalance");
+        
+        this.serverBalanceFilename = serverBalanceFile.getAbsolutePath();
+
+        // set the initial server balance
+        if(serverBalanceFile.exists()) {
+            ObjectInputStream ois = null;
+            try {
+                ois = new ObjectInputStream(new FileInputStream(serverBalanceFile));
+                BigDecimal bd = (BigDecimal) ois.readObject();
+                ois.close();
+                
+                this.setServerBalance(bd);
+            } catch (FileNotFoundException ex) {
+                Logger.getLogger(LonelyEconomyEconomy.class.getName()).log(Level.SEVERE, null, ex);
+
+                plugin.disable();
+                
+                return;
+            }
+            catch (    IOException | ClassNotFoundException ex) {
+                Logger.getLogger(LonelyEconomyEconomy.class.getName()).log(Level.SEVERE, null, ex);
+            
+                plugin.disable();
+                
+                return;
+            }
+        }
+        else {
+            this.setServerBalance(this.getBigDecimal(plugin.getConfig().getInt("server_starting_balance",0)));
         }
         
         this.enabled = true;
@@ -202,10 +236,6 @@ public final class LonelyEconomyEconomy {
         return new BigDecimal(0);
     }
     
-    public BigDecimal getServerBalance() {
-        return this.getBalance(SERVER_ACCOUNT_USERNAME);
-    }
-    
     public boolean hasBalance(String player, BigDecimal amount) {
         // amount >= playerBalance
         return this.getBalance(player).compareTo(amount) > -1;
@@ -232,7 +262,7 @@ public final class LonelyEconomyEconomy {
                 .setMessage("A database error occurred!");
         }
         
-        System.out.println((System.nanoTime()-startTime)+" setPlayerBalance()");
+        System.out.println((System.nanoTime()-startTime)+" setPlayerBalance("+playerName+")");
         
         return new LonelyEconomyResponse(LonelyEconomyResponseType.SUCCESS)
             .setBalance(amount);
@@ -240,11 +270,6 @@ public final class LonelyEconomyEconomy {
     
     public LonelyEconomyResponse takeMoneyFromPlayer(String playerName, BigDecimal amount) {
         long startTime = System.nanoTime();
-// Disable accessing the server account
-        if(playerName.equalsIgnoreCase(SERVER_ACCOUNT_USERNAME)) {
-            return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE)
-                .setMessage("Server account cannot be accessed this way");
-        }
         
         if(!this.hasAccount(playerName)) {
             return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE_NO_ACCOUNT_EXISTS)
@@ -273,10 +298,10 @@ public final class LonelyEconomyEconomy {
         }
         
 // Get the server's balance to give the new amount to it
-        BigDecimal serverBalance = this.getBalance(this.SERVER_ACCOUNT_USERNAME);
+        BigDecimal serverBalance = this.getServerBalance();
         
 // Give the money to the server
-        ler = this.setPlayerBalance(this.SERVER_ACCOUNT_USERNAME, serverBalance.add(amount));
+        ler = this.setServerBalance(serverBalance.add(amount));
         
 // Error occurred 
         if(!ler.wasSuccessful()) {
@@ -287,18 +312,13 @@ public final class LonelyEconomyEconomy {
         
         this.log("Took "+amount.toPlainString()+" from "+playerName);
         
-        System.out.println((System.nanoTime()-startTime)+" takeMoneyFromPlayer()");
+        System.out.println((System.nanoTime()-startTime)+" takeMoneyFromPlayer("+playerName+")");
 // Return success  
         return ler;
     }
 
     public LonelyEconomyResponse giveMoneyToPlayer(String playerName, BigDecimal amount) {
         long startTime = System.nanoTime();
-// Disable accessing the server account
-        if(playerName.equalsIgnoreCase(SERVER_ACCOUNT_USERNAME)) {
-            return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE)
-                .setMessage("Server account cannot be accessed this way");
-        }
         
         if(!this.hasAccount(playerName)) {
             return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE_NO_ACCOUNT_EXISTS)
@@ -308,7 +328,7 @@ public final class LonelyEconomyEconomy {
         this.log("Attempting to give "+amount.toPlainString()+" to "+playerName);
        
 // Grab server's balance to see if the server has enough
-        BigDecimal serverBalance = this.getBalance(this.SERVER_ACCOUNT_USERNAME);
+        BigDecimal serverBalance = this.getServerBalance();
 
 // Check if the server balance is lower than the amount
         if(serverBalance.compareTo(amount) == -1) {
@@ -317,9 +337,7 @@ public final class LonelyEconomyEconomy {
         }
 
 // Take the money from the server        
-        LonelyEconomyResponse ler = this.setPlayerBalance(
-                this.SERVER_ACCOUNT_USERNAME, 
-                serverBalance.subtract(amount));
+        LonelyEconomyResponse ler = this.setServerBalance(serverBalance.subtract(amount));
 
 // Error occurred        
         if(!ler.wasSuccessful()) {
@@ -345,7 +363,7 @@ public final class LonelyEconomyEconomy {
         
         this.log("Gave "+amount.toPlainString()+" to "+playerName);
 
-        System.out.println((System.nanoTime()-startTime)+" giveMoneyToPlayer()");
+        System.out.println((System.nanoTime()-startTime)+" giveMoneyToPlayer("+playerName+")");
 // Return success        
         return ler;
     }
@@ -370,7 +388,7 @@ public final class LonelyEconomyEconomy {
             return ler;
         }
         
-        System.out.println((System.nanoTime()-startTime)+" payPlayer()");
+        System.out.println((System.nanoTime()-startTime)+" payPlayer("+payFrom+","+payTo+")");
         return this.giveMoneyToPlayer(payTo,amount);
     }
 
@@ -379,10 +397,8 @@ public final class LonelyEconomyEconomy {
         {
             PreparedStatement statement = sqlite.prepare(""
                 + "SELECT username,balance "
-                + "FROM accounts WHERE username != ? "
+                + "FROM accounts "
                 + "ORDER BY sorting_balance DESC,username ASC LIMIT "+iTopAmount+";");
-            
-            statement.setString(1, SERVER_ACCOUNT_USERNAME);
             
             ResultSet result = statement.executeQuery();
             
@@ -411,10 +427,9 @@ public final class LonelyEconomyEconomy {
             PreparedStatement statement = sqlite.prepare(""
                 + "SELECT COUNT(username) as rank "
                 + "FROM accounts "
-                + "WHERE username != ? AND sorting_balance > ?");
+                + "WHERE AND sorting_balance > ?");
             
-            statement.setString(1,this.SERVER_ACCOUNT_USERNAME);
-            statement.setInt(2, this.getBalance(playerName).intValue());
+            statement.setInt(1, this.getBalance(playerName).intValue());
             
             ResultSet result = statement.executeQuery();
 
@@ -449,7 +464,7 @@ public final class LonelyEconomyEconomy {
 
         bd = new BigDecimal(amount);
 
-        System.out.println((System.nanoTime()-startTime)+" from getBigDecimal()");
+        System.out.println((System.nanoTime()-startTime)+" from getBigDecimal("+amount+")");
         return bd.setScale(2, BigDecimal.ROUND_HALF_UP);
     }
     
@@ -477,5 +492,31 @@ public final class LonelyEconomyEconomy {
     private void log(String message)
     {
         logger.info(message);
+    }
+    
+    private final String serverBalanceFilename;
+    private LonelyEconomyResponse setServerBalance(BigDecimal bd) {
+        ObjectOutputStream oos = null;
+        
+        try {
+            oos = new ObjectOutputStream(new FileOutputStream(serverBalanceFilename));
+            oos.writeObject(bd);
+            oos.flush();
+            oos.close();
+        } catch (IOException ex) {
+            Logger.getLogger(LonelyEconomyEconomy.class.getName()).log(Level.SEVERE, null, ex);
+
+            return new LonelyEconomyResponse(LonelyEconomyResponseType.FAILURE)
+                    .setMessage("Unable to persist server balance!");
+        }
+        
+        this.SERVER_BALANCE = bd;
+        
+        return new LonelyEconomyResponse(LonelyEconomyResponseType.SUCCESS)
+            .setBalance(bd);
+    }
+    
+    public BigDecimal getServerBalance() {
+        return this.SERVER_BALANCE;
     }
 }

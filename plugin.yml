@@ -1,6 +1,6 @@
 name: LonelyEconomy
 main: com.ne0nx3r0.lonelyeconomy.LonelyEconomy
-version: '0.1a'
+version: '0.1b'
 database: false
 description: Lonely Economy Manager
 commands:

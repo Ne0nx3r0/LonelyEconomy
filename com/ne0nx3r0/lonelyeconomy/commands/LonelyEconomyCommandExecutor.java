@@ -42,9 +42,9 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
         {
             switch(args[0])
             {
-                case "balance":
+               /* case "balance":
                 case "b":
-                    return this._balance(cs,args);
+                    return this._balance(cs,args);*/
                 case "pay":
                     return this._pay(cs,args);
                 case "give":
@@ -94,7 +94,7 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
         
         if(cs.hasPermission("lonelyeconomy.balance"))
         {
-            availableCommands.add("/money balance");
+            availableCommands.add("/money");
         }
         if(cs.hasPermission("lonelyeconomy.balance.others"))
         {
@@ -220,9 +220,15 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
         
         this.send(cs,"Pay","Sent "+amount+" to "+payTo);
         
+        Player pPayTo = Bukkit.getPlayer(payTo);
+        
+        if(pPayTo != null) {
+            pPayTo.sendMessage(cs.getName()+ChatColor.RESET+" has paid you "+this.economy.format(amount));
+        }
+        
         return true;
     }
-    
+    /*
     private boolean _balance(CommandSender cs, String[] args) {
         if(!this.hasCommandPermission(cs, "lonelyeconomy.balance", "check player's balances")) {
             return true;
@@ -256,7 +262,7 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
         }
         
         return true;
-    }
+    }*/
 
     private boolean _top(CommandSender cs, String[] args) {
         if(!this.hasCommandPermission(cs, "lonelyeconomy.top", "see top players")){ 
@@ -362,7 +368,7 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
             return true;
         }
         
-        cs.sendMessage(payTo+" was paid "+amount.toPlainString()+" from the server account.");
+        this.send(cs,"Give",payTo+" was paid "+amount.toPlainString()+" from the server account.");
         
         return true;
     }
@@ -403,7 +409,7 @@ public class LonelyEconomyCommandExecutor implements CommandExecutor {
             return true;
         }
         
-        cs.sendMessage(playerTakeFrom+" lost "+amount.toPlainString()+" which was given to the server account.");
+        this.send(cs,"Take", playerTakeFrom+" lost "+amount.toPlainString()+" which was given to the server account.");
         
         return true;
     }

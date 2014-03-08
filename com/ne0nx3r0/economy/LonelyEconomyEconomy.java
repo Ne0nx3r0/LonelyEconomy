@@ -419,7 +419,7 @@ public final class LonelyEconomyEconomy {
             PreparedStatement statement = sqlite.prepare(""
                 + "SELECT COUNT(username) as rank "
                 + "FROM accounts "
-                + "WHERE AND sorting_balance > ?");
+                + "WHERE sorting_balance > ?");
             
             statement.setInt(1, this.getBalance(playerName).intValue());
             
@@ -445,7 +445,7 @@ public final class LonelyEconomyEconomy {
     }
     
     public BigDecimal getBigDecimal(double amount) {
-        BigDecimal bd = new BigDecimal(amount);
+        BigDecimal bd = new BigDecimal(Math.abs(amount));
         
         return bd.setScale(2, BigDecimal.ROUND_HALF_UP);
     }
@@ -455,7 +455,7 @@ public final class LonelyEconomyEconomy {
 
         bd = new BigDecimal(amount);
 
-        return bd.setScale(2, BigDecimal.ROUND_HALF_UP);
+        return bd.setScale(2, BigDecimal.ROUND_HALF_UP).abs();
     }
     
     public double getDouble(BigDecimal bd) {
